@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dice Auction Room</title>
+
+    <style>
+        .hidden {
+            display: none;
+        }
+
+
+    </style>
+</head>
+<body>
+    <h1>Dice Auction Room</h1>
+
+    <p>Welcome! Please enter a name and click the button when you're ready.</p>
+
+    <div id="error"></div>
+
+    <input type="hidden" name="id" id="id">
+    <input type="text" name="name" id="name">
+
+    <button id="update-name">Update</button>
+
+    <button id="roll">Start Auction</button>
+
+    <button id="reveal">Reveal Rolls</button>
+
+    <hr>
+
+    <table id="users">
+        <tr>
+            <th></th>
+            <th>User</th>
+            <th>Roll</th>
+        </tr>
+    </table>
+
+    <script>
+        function populateError(message) {
+            var el = document.getElementById('error');
+            
+            el.innerHTML = message;
+
+            if (el.classList.contains('hidden')) {
+                el.classList.remove('hidden');
+            }
+        }
+
+        function clearError() {
+            var el = document.getElementById('error');
+            
+            el.innerHTML = '';
+
+            if (!el.classList.contains('hidden')) {
+                el.classList.add('hidden');
+            }
+        }
+
+        function updateUsers(users) {
+            // Refresh the users table.
+            var table = document.getElementById('users');
+            var innerHTML = `
+            <tr>
+                <th></th>
+                <th>User</th>
+                <th>Roll</th>
+            </tr>`;
+
+            for (const key in users) {
+                let user = users[key];
+                innerHTML += `<tr>
+                    <td> ${user.referee ? '🎲' : ''} </td>
+                    <td> ${user.name} </td>
+                    <td> ${user.roll ? user.roll : ''} </td>
+                </tr>`;
+            }
+
+            table.innerHTML = innerHTML;
+
+            return;
+        }
+
+        const ws = new WebSocket('ws://localhost:8080'); // Should change to wss for prod (secure form)
+        
+        ws.addEventListener('open', () => {
+            // Get current list of users.
+            ws.send(JSON.stringify({
+                event: 'queryUsers',
+            }));
+
+            // Add listeners to buttons so they can send updates to the Node server.
+            
+            document.getElementById('update-name').addEventListener('click', () => {
+                // Send new name to server.
+                ws.send(JSON.stringify({
+                    event: 'updateName',
+                    name: document.getElementById('name').value,
+                }));
+            });
+
+            document.getElementById('roll').addEventListener('click', () => {
+                // Send roll event to server.
+                ws.send(JSON.stringify({
+                    event: 'roll',
+                }));
+            });
+
+            document.getElementById('reveal').addEventListener('click', () => {
+                // Send reveal event to server.
+                ws.send(JSON.stringify({
+                    event: 'reveal',
+                }));
+            });
+        });
+
+        ws.addEventListener('message', e => {
+            // Listen for changes from the server.
+            var data = JSON.parse(e.data);
+
+            if (data.event === 'update') {
+                if (data.hasOwnProperty('name')) {
+                    document.getElementById('name').value = data.name;
+                }
+
+                updateUsers(data.users);
+            }
+
+            if (data.event === 'error') {
+                // Populate an error message.
+                populateError(data.message);
+
+                if (data.errorType === 'nameCollision') {
+                    // Replace name input field with actual name according to server.
+                    document.getElementById('name').value = data.name;
+                }
+            }
+        });
+    </script>
+</body>
+</html>
